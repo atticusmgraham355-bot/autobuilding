@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
@@ -32,28 +33,35 @@ public class TheAuto extends OpMode
         final double Kd = 0.02349;
         final double A  = 0.002104;
         final double B  = 0.0186;
-        final double kS = 0.698; // 96 mm grip wheels on FTC foam tiles
+        final double kS = 0.698; // 96 mm grip wheels on FTC foam tiles friction coefficient
         
         // 2. Unit conversion constants (96 mm wheel, 19.2:1 motor, 537.7 ticks/rev)
         final double METERS_TO_MOTOR_RAD = 19.2 / 0.048; // Exactly 400.0 rad/m
         final double TICKS_TO_MOTOR_RAD  = (2.0 * Math.PI) / (537.7 / 19.2);
 
         // 3. Example target inputs in METERS (replace with your motion profile or setpoint)
-        final double targetMeters    = 0.01; // Drive 1.5 meters
+        final double targetMeters    = 0.4; // Drive 1.5 meters
         final double targetVelMps    = 0.0; // m/s (0.0 if driving to a stationary point)
         final double targetAccelMps2 = 0.0; // m/s^2 (0.0 if driving to a stationary point)
+        final double targetMetersA    = 0.4; // Drive 1.5 meters
+        final double targetVelMpsA    = 0.0; // m/s (0.0 if driving to a stationary point)
+        final double targetAccelMps2A = 0.0; // m/s^2 (0.0 if driving to a stationary point)
         final double VELOCITY_THRESHOLD = 1e-4; 
         final double POSITION_DEADBAND = 0.01 * METERS_TO_MOTOR_RAD;
         // Convert meter targets to bare-motor radians
         double targetThetaM     = targetMeters * METERS_TO_MOTOR_RAD;
         double targetThetaDotM  = targetVelMps * METERS_TO_MOTOR_RAD;
         double targetThetaDDotM = targetAccelMps2 * METERS_TO_MOTOR_RAD;
-        double motorpowerL=0.0;
-        double motorpowerR=0.0;
+        double targetThetaMA     = targetMetersA * METERS_TO_MOTOR_RAD;
+        double targetThetaDotMA  = targetVelMpsA * METERS_TO_MOTOR_RAD;
+        double targetThetaDDotMA = targetAccelMps2A * METERS_TO_MOTOR_RAD;
+        double motorpowerL=0.1;
+        double motorpowerR=0.1;
         double intakePower=0.0;
         double prevTicksL=0.0;
         double prevTicksR=0.0;
         double prevTime=0.0;
+        double power=0.0;
   //start of moving
         
         
@@ -151,9 +159,9 @@ public class TheAuto extends OpMode
           @Override
           public void loop() {
             double batteryVoltage = hardwareMap.voltageSensor.iterator().next().getVoltage();
-            long LcurrentTicks = leftDrive.getCurrentPosition();
+            long LcurrentTicks = -leftDrive.getCurrentPosition();
             double currentTime = timer.seconds();
-            long RcurrentTicks = rightDrive.getCurrentPosition();
+            long RcurrentTicks = -rightDrive.getCurrentPosition();
             double deltaTicksR = RcurrentTicks - prevTicksR;
             double deltaTicksL = LcurrentTicks - prevTicksL;
             double deltaTime = currentTime - prevTime;
@@ -175,18 +183,61 @@ public class TheAuto extends OpMode
             double errorDotR = targetThetaDotM - thetaDotMR;
             motorpowerL=drive(errorL,Kp,Kd,errorDotL,targetThetaDotM,B,batteryVoltage,A,targetThetaDDotM,kS,VELOCITY_THRESHOLD,POSITION_DEADBAND);
             motorpowerR=drive(errorR,Kp,Kd,errorDotR,targetThetaDotM,B,batteryVoltage,A,targetThetaDDotM,kS,VELOCITY_THRESHOLD,POSITION_DEADBAND);
+            
             telemetry.addData("Motors", "left (%.2f), right (%.2f)", motorpowerL, motorpowerR);
-            if(motorpowerL>0 && motorpowerR>0){
-                leftDrive.setPower(motorpowerL);
-                rightDrive.setPower(motorpowerR);
+            if(currentTime<5){
+                
+                leftDrive.setPower(-motorpowerL);
+                rightDrive.setPower(-motorpowerR);
             }
             leftDrive.setPower(0);
             rightDrive.setPower(0);
-          }
+            if(currentTime>5 && currentTime<8){
+
+                batteryVoltage = hardwareMap.voltageSensor.iterator().next().getVoltage();
+                LcurrentTicks = -leftDrive.getCurrentPosition();
+                currentTime = timer.seconds();
+                RcurrentTicks = -rightDrive.getCurrentPosition();
+                deltaTicksR = RcurrentTicks - prevTicksR;
+                deltaTicksL = LcurrentTicks - prevTicksL;
+                deltaTime = currentTime - prevTime;
+                manualVelocityL = deltaTicksL / deltaTime; // Ticks per second
+                manualVelocityR = deltaTicksR / deltaTime; // Ticks per second
+    
+            // 4. Read current state from DcMotorEx encoder
+                thetaML    = LcurrentTicks * TICKS_TO_MOTOR_RAD; // rad
+                thetaDotML = (manualVelocityL)* TICKS_TO_MOTOR_RAD;        // rad/s
+                thetaMR    = RcurrentTicks * TICKS_TO_MOTOR_RAD; // rad
+                thetaDotMR = (manualVelocityR)* TICKS_TO_MOTOR_RAD;    
+                prevTicksL = LcurrentTicks;
+                prevTicksR = RcurrentTicks;
+                prevTime = currentTime;
+                double errorLA    = targetThetaMA - thetaML;
+                double errorDotLA = targetThetaDotMA - thetaDotML;
+                double errorRA    = targetThetaMA - thetaMR;
+                double errorDotRA = targetThetaDotMA - thetaDotMR;
+                motorpowerL=drive(errorLA,Kp,Kd,errorDotLA,targetThetaDotMA,B,batteryVoltage,A,targetThetaDDotMA,kS,VELOCITY_THRESHOLD,POSITION_DEADBAND);
+                motorpowerR=drive(errorRA,Kp,Kd,errorDotRA,targetThetaDotMA,B,batteryVoltage,A,targetThetaDDotMA,kS,VELOCITY_THRESHOLD,POSITION_DEADBAND);
+                
+                leftDrive.setPower(-motorpowerL);
+                rightDrive.setPower(motorpowerR);
+                
+            
+              }
+              if(currentTime>10 && currentTime<22){
+                rightIntakeServo.setPower(1);
+                launch();
+              }
+              if(currentTime>22){
+                donothing();  
+              }
+            } 
           @Override
           public void stop() {
           }
+          //launches pollen
           void launch() {
+            
             launcher.setVelocity(LAUNCHER_TARGET_VELOCITY);
             if (launcher.getVelocity() > LAUNCHER_MIN_VELOCITY)
             {
@@ -195,7 +246,7 @@ public class TheAuto extends OpMode
                 windmillServo.setPower(0);
             }
           }
-
+          //PID found friction coefficents 
           double drive(double er,double h,double d,double ed,double TTDM,double Bye,double bv,double As,double TTDDM,double kSp,double VT,double PD){
               double direction = 0.0;
 
@@ -215,5 +266,11 @@ public class TheAuto extends OpMode
               double power = Math.max(-1.0, Math.min(1.0, vTotal / bv));
         
               return power;
+          }
+          //turns off shooter and hopper
+          double donothing(){
+              launcher.setVelocity(0);
+              rightIntakeServo.setPower(0);
+              return 0;
           }
 }
